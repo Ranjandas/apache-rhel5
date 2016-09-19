@@ -1,11 +1,10 @@
-%define _unpackaged_files_terminate_build 0 
 %define contentdir /var/www
 %define suexec_caller apache
 %define mmn 20120211
 
 Summary: Apache HTTP Server
 Name: httpd
-Version: 2.4.23
+Version: 2.4.20
 Release: 1
 URL: http://httpd.apache.org/
 Vendor: Apache Software Foundation
@@ -14,7 +13,8 @@ License: Apache License, Version 2.0
 Group: System Environment/Daemons
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
 BuildRequires: autoconf, perl, pkgconfig, findutils
-BuildRequires: zlib-devel, libselinux-devel, e2fsprogs-devel
+BuildRequires: zlib-devel, libselinux-devel, libuuid-devel
+BuildRequires: apr-devel >= 1.4.0, apr-util-devel >= 1.4.0, pcre-devel >= 5.0
 Requires: initscripts >= 8.36, /etc/mime.types
 Obsoletes: httpd-suexec
 Requires(pre): /usr/sbin/useradd
@@ -32,7 +32,7 @@ Internet.
 Group: Development/Libraries
 Summary: Development tools for the Apache HTTP server.
 Obsoletes: secureweb-devel, apache-devel
-Requires: pkgconfig, libtool
+Requires: apr-devel, apr-util-devel, pkgconfig, libtool
 Requires: httpd = %{version}-%{release}
 
 %description devel
@@ -134,13 +134,8 @@ if test "x${vmmn}" != "x%{mmn}"; then
 fi
 
 %build
-cd srclib/pcre
-./configure \
-	--prefix=%{_libdir}/pcre \
-	--enable-utf8 \
-	--enable-unicode-properties
-make && make install
-cd ../..
+# forcibly prevent use of bundled apr, apr-util, pcre
+rm -rf srclib/{apr,apr-util,pcre}
 
 %configure \
 	--enable-layout=RPM \
@@ -151,7 +146,7 @@ cd ../..
 	--datadir=%{contentdir} \
         --with-installbuilddir=%{_libdir}/httpd/build \
         --enable-mpms-shared=all \
-        --with-included-apr \
+        --with-apr=%{_prefix} --with-apr-util=%{_prefix} \
 	--enable-suexec --with-suexec \
 	--with-suexec-caller=%{suexec_caller} \
 	--with-suexec-docroot=%{contentdir} \
@@ -159,14 +154,11 @@ cd ../..
 	--with-suexec-bin=%{_sbindir}/suexec \
 	--with-suexec-uidmin=500 --with-suexec-gidmin=100 \
         --enable-pie \
-        --with-pcre=%{_libdir}/pcre \
+        --with-pcre \
         --enable-mods-shared=all \
         --enable-ssl --with-ssl --enable-socache-dc --enable-bucketeer \
         --enable-case-filter --enable-case-filter-in \
-        --disable-imagemap \
-	--enable-ldap --with-ldap \
-	--enable-proxy-fdpass \
-	--enable-session-crypto --with-crypto
+        --disable-imagemap
 
 make %{?_smp_mflags}
 
@@ -264,9 +256,6 @@ fi
 
 %clean
 rm -rf $RPM_BUILD_ROOT
-rm -f $RPM_BUILD_ROOT%{_libdir}/aprutil.exp
-rm -f $RPM_BUILD_ROOT%{_libdir}/apr.exp
-
 
 %files
 %defattr(-,root,root)
@@ -314,17 +303,6 @@ rm -f $RPM_BUILD_ROOT%{_libdir}/apr.exp
 %{_sbindir}/htcacheclean
 %{_sbindir}/httpd
 %{_sbindir}/apachectl
-
-# APR Sepcific files
-%{_bindir}/apr-1-config
-%{_bindir}/apu-1-config
-%{_libdir}/apr-util-1/*
-%{_libdir}/libapr*
-%{_libdir}/pkgconfig/apr*
-
-# PCRE Specific files
-%{_libdir}/pcre/*
-
 %attr(4510,root,%{suexec_caller}) %{_sbindir}/suexec
 
 %dir %{_libdir}/httpd
@@ -395,7 +373,6 @@ rm -f $RPM_BUILD_ROOT%{_libdir}/apr.exp
 %{_libdir}/httpd/modules/mod_mpm_prefork.so
 %{_libdir}/httpd/modules/mod_mpm_worker.so
 %{_libdir}/httpd/modules/mod_negotiation.so
-%{_libdir}/httpd/modules/mod_proxy_hcheck.so
 %{_libdir}/httpd/modules/mod_proxy_ajp.so
 %{_libdir}/httpd/modules/mod_proxy_balancer.so
 %{_libdir}/httpd/modules/mod_proxy_connect.so
